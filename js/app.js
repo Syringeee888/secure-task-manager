@@ -1,16 +1,7 @@
 "use strict";
 
-// ---- Cached DOM references ----
-const taskInput = document.getElementById("taskInput");
-const addTaskBtn = document.getElementById("addTaskBtn");
-const loadSamplesBtn = document.getElementById("loadSamplesBtn");
-const taskList = document.getElementById("taskList");
-const taskMessage = document.getElementById("taskMessage");
-const totalCount = document.getElementById("totalCount");
-const pendingCount = document.getElementById("pendingCount");
-const completedCount = document.getElementById("completedCount");
-
 const EMPTY_MESSAGE = "Task cannot be empty";
+
 const SAMPLE_TASKS = [
   "Review DOM selectors",
   "Practice createElement",
@@ -19,16 +10,38 @@ const SAMPLE_TASKS = [
 
 let taskCounter = 0;
 
-// ---- Helpers ----
 function generateTaskId() {
-  taskCounter += 1;
-  let id = "task-" + taskCounter;
-  // Guarantee uniqueness even if an ID already exists in the DOM
-  while (taskList.querySelector('[data-task-id="' + id + '"]')) {
+  let id;
+  do {
     taskCounter += 1;
-    id = "task-" + taskCounter;
-  }
+    id = `task-${taskCounter}`;
+  } while (document.querySelector(`[data-task-id="${id}"]`));
   return id;
+}
+
+function createTaskData(text) {
+  return { id: generateTaskId(), text: text.trim(), state: "pending" };
+}
+
+const dom = {
+  taskInput: document.getElementById("taskInput"),
+  addTaskBtn: document.getElementById("addTaskBtn"),
+  loadSamplesBtn: document.getElementById("loadSamplesBtn"),
+  taskList: document.getElementById("taskList"),
+  taskMessage: document.getElementById("taskMessage"),
+  totalCount: document.getElementById("totalCount"),
+  pendingCount: document.getElementById("pendingCount"),
+  completedCount: document.getElementById("completedCount")
+};
+
+const { taskInput, addTaskBtn, loadSamplesBtn, taskList } = dom;
+
+function isBlank(text) {
+  return text.trim() === "";
+}
+
+function showMessage(text) {
+  dom.taskMessage.textContent = text;
 }
 
 function createButton(className, label) {
@@ -39,13 +52,6 @@ function createButton(className, label) {
   return button;
 }
 
-function showMessage(text) {
-  taskMessage.textContent = text;
-}
-
-// ---- Required functions ----
-
-// Creates one task <li>; does NOT attach it to the list.
 function createTaskElement(taskText, taskId) {
   const li = document.createElement("li");
   li.classList.add("task-item");
@@ -56,28 +62,14 @@ function createTaskElement(taskText, taskId) {
   span.classList.add("task-text");
   span.textContent = taskText;
 
-  li.append(
-    span,
-    createButton("complete-btn", "Complete"),
-    createButton("edit-btn", "Edit"),
-    createButton("remove-btn", "Remove")
-  );
+  const buttons = [
+    ["complete-btn", "Complete"],
+    ["edit-btn", "Edit"],
+    ["remove-btn", "Remove"]
+  ].map(([className, label]) => createButton(className, label));
+
+  li.append(span, ...buttons);
   return li;
-}
-
-function addTask(taskText) {
-  const text = taskText.trim();
-  if (text === "") {
-    showMessage(EMPTY_MESSAGE);
-    return;
-  }
-
-  const taskItem = createTaskElement(text, generateTaskId());
-  taskList.appendChild(taskItem);
-
-  taskInput.value = "";
-  showMessage("");
-  updateTaskCounts();
 }
 
 function toggleTaskComplete(taskItem) {
@@ -107,15 +99,14 @@ function saveTaskEdit(taskItem) {
   const editBtn = taskItem.querySelector(".edit-btn");
   if (!input || !editBtn) return;
 
-  const newText = input.value.trim();
-  if (newText === "") {
+  if (isBlank(input.value)) {
     showMessage(EMPTY_MESSAGE);
     return;
   }
 
   const span = document.createElement("span");
   span.classList.add("task-text");
-  span.textContent = newText;
+  span.textContent = input.value.trim();
 
   input.replaceWith(span);
   editBtn.textContent = "Edit";
@@ -128,24 +119,28 @@ function removeTask(taskItem) {
 }
 
 function updateTaskCounts() {
-  const items = taskList.querySelectorAll(".task-item");
-  let pending = 0;
-  let completed = 0;
+  const items = Array.from(taskList.querySelectorAll(".task-item"));
+  const completed = items.filter((item) => item.dataset.state === "completed").length;
 
-  items.forEach(function (item) {
-    if (item.dataset.state === "completed") {
-      completed += 1;
-    } else {
-      pending += 1;
-    }
-  });
-
-  totalCount.textContent = items.length;
-  pendingCount.textContent = pending;
-  completedCount.textContent = completed;
+  dom.totalCount.textContent = items.length;
+  dom.completedCount.textContent = completed;
+  dom.pendingCount.textContent = items.length - completed;
 }
 
-// Single delegated click handler for all task actions.
+function addTask(taskText) {
+  if (isBlank(taskText)) {
+    showMessage(EMPTY_MESSAGE);
+    return;
+  }
+
+  const { id, text } = createTaskData(taskText);
+  taskList.appendChild(createTaskElement(text, id));
+
+  taskInput.value = "";
+  showMessage("");
+  updateTaskCounts();
+}
+
 function handleTaskListClick(event) {
   const target = event.target;
   const taskItem = target.closest(".task-item");
@@ -166,25 +161,19 @@ function handleTaskListClick(event) {
 
 function loadSampleTasks() {
   const fragment = document.createDocumentFragment();
-  SAMPLE_TASKS.forEach(function (text) {
-    fragment.appendChild(createTaskElement(text, generateTaskId()));
+  SAMPLE_TASKS.map(createTaskData).forEach(({ id, text }) => {
+    fragment.appendChild(createTaskElement(text, id));
   });
-  taskList.appendChild(fragment); // appended once
+  taskList.appendChild(fragment);
   showMessage("");
   updateTaskCounts();
 }
 
-// ---- Event wiring ----
-taskList.addEventListener("click", handleTaskListClick); // the only listener on #taskList
-
-addTaskBtn.addEventListener("click", function () {
-  addTask(taskInput.value);
-});
-
-taskInput.addEventListener("keydown", function (event) {
+taskList.addEventListener("click", handleTaskListClick);
+addTaskBtn.addEventListener("click", () => addTask(taskInput.value));
+taskInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") addTask(taskInput.value);
 });
-
 loadSamplesBtn.addEventListener("click", loadSampleTasks);
 
 updateTaskCounts();
